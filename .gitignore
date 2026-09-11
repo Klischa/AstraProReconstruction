@@ -1,0 +1,32 @@
+# Другие верхнеуровневые проекты (не входят в репозиторий)
+LifeOS/
+LoopTroop/
+MiMo-Code/
+scans/
+win7_iso/
+log/
+pin_bruteforce/
+i2c_scanner/
+test_board/
+smoke.obj
+
+# Агентская конфигурация (локальная)
+AGENTS.md
+antislop.md
+.opencode/
+.gigacode/
+.gigaide/
+.idea/
+
+# ROS2 build artifacts
+build/
+install/
+log/
+__pycache__/
+*.pyc
+
+# Editor / OS
+.vscode/
+*.swp
+*~
+Thumbs.db

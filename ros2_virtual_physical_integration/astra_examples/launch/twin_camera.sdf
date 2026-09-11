@@ -1,0 +1,33 @@
+<sdf version="1.7">
+  <model name="twin_camera">
+    <static>false</static>
+    <link name="link">
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.001</ixx>
+          <iyy>0.001</iyy>
+          <izz>0.001</izz>
+        </inertia>
+      </inertial>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>0.1 0.1 0.1</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.5 0.5 0.5 1</ambient>
+          <diffuse>0.5 0.5 0.5 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.1 0.1 0.1</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>
