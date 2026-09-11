@@ -30,3 +30,7 @@ __pycache__/
 *.swp
 *~
 Thumbs.db
+
+# TF2 view_frames artifacts
+frames_*.gv
+frames_*.pdf

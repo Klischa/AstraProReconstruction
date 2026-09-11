@@ -1,0 +1,51 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Plane Cell Count: 40
+      Reference Frame: map
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Frame Timeout: 15
+      Marker Scale: 0.2
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Box Points
+      Enabled: true
+      Topic:
+        Value: /scan/box_points
+      Style: Points
+      Size (Pixels): 3
+      Use Fixed Frame: true
+      Use Rainbow: false
+      Color Transformer: RGB8
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Scan Box Marker
+      Enabled: true
+      Topic:
+        Value: /scan_box/marker
+      Queue Size: 10
+  Global Options:
+    Background Color: 10; 10; 12
+    Fixed Frame: map
+    Frame Rate: 30
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.5
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 0.7
+      Name: Current View
+      Pitch: -0.6
+      Yaw: 0.4
+  Window Geometry:
+    Width: 1280
+    Height: 800

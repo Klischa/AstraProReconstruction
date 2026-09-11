@@ -75,11 +75,17 @@
 │   │   │   └── test_camera_publisher.cpp # Симуляция данных камеры
 │   │   └── launch/
 │   │       ├── gazebo_twin.launch.py    # Запуск (реальная/симуляция)
+│   │       ├── scan_camera.launch.py    # Камера standalone (для сканирования)
 │   │       ├── test_twin.launch.py      # Режим без реальной камеры
-│   │       ├── twin_camera.sdf           # 3D модель виртуальной камеры
-│   │       ├── twin_view.rviz            # Конфиг RViz2
-│   │       └── empty.world               # Пустой мир Gazebo
-│   └── astra_camera_ros/astra_camera/    # Драйвер ros2_astra_camera
+│   │       ├── twin_camera.sdf          # 3D модель виртуальной камеры
+│   │       ├── twin_view.rviz           # Конфиг RViz2
+│   │       └── empty.world              # Пустой мир Gazebo
+│   ├── astra_scan/                      # Фильтр виртуального куба сканирования
+│   │   ├── astra_scan/box_filter.py     # Узел box_crop_filter (Python)
+│   │   └── launch/
+│   │       ├── scan_box.launch.py       # Запуск фильтра
+│   │       └── scan_box.rviz            # RViz-конфиг для куба
+│   └── astra_camera_ros/astra_camera/   # Драйвер ros2_astra_camera
 │       └── src/ob_camera_node_factory.cpp
 ├── astra-ros2-launcher/                 # PowerShell-скрипты (старт/стоп/бэг)
 ├── camera_stream/                       # Прошивка камеры (Arduino)
@@ -185,6 +191,66 @@ ros2 run image_view image_view image:=/camera/depth/image_raw
 # Глубина, нормализованная в градации серого (0–2000 мм):
 python3 normalize_depth.py &    # публикует /camera/depth/view
 ros2 run image_view image_view image:=/camera/depth/view
+```
+
+## Сканирование объектов с выбором зоны (виртуальный куб)
+
+Полная сессия: камера отдельно (без сцены Gazebo) + **RTAB-Map** SLAM + фильтр куба.
+
+```bash
+# 1. Камера standalone (стандарт, registration + цветное облако)
+ros2 launch astra_examples scan_camera.launch.py
+
+# 2. RTAB-Map RGB-D SLAM (построение карты)
+ros2 launch rtabmap_launch rtabmap.launch.py \
+  rgb_topic:=/camera/color/image_raw \
+  depth_topic:=/camera/depth/image_raw \
+  camera_info_topic:=/camera/depth/camera_info \
+  frame_id:=camera_link approx_sync:=true approx_sync_max_interval:=0.2 \
+  args:="--delete_db_on_start -d" database_path:=~/scans/rtabmap.db \
+  rtabmap_viz:=true rviz:=false
+```
+
+> **Важно**: для сканирования нельзя одновременно держать `gazebo_twin` — он публикует
+> свой TF `world → twin_camera` (два несвязанных дерева TF ломают RTAB-Map).
+
+### Фильтр виртуального куба `scan_box_filter`
+
+Узел подписывается на накопленную карту `/rtabmap/cloud_map`, оставляет только точки
+внутри **настраиваемого 3D-куба** и публикует результат в `/scan/box_points`.
+Размеры и положение куба меняются параметрами в реальном времени (без перезапуска).
+
+```bash
+# Запуск
+ros2 launch astra_scan scan_box.launch.py
+# или напрямую:
+scan_box_filter --ros-args \
+  -p input_topic:=/rtabmap/cloud_map -p output_topic:=/scan/box_points \
+  -p center_z:=0.7 -p size_x:=0.8 -p size_y:=0.8 -p size_z:=0.8
+
+# Центр куба (map frame, метры)
+ros2 param set /scan_box_filter center_x 0.15
+ros2 param set /scan_box_filter center_y -0.05
+ros2 param set /scan_box_filter center_z 0.9
+
+# Размеры куба (метры)
+ros2 param set /scan_box_filter size_x 1.2
+ros2 param set /scan_box_filter size_y 1.2
+ros2 param set /scan_box_filter size_z 1.2
+
+# Точки можно инвертировать: invert=true — всё ВНЕ куба
+ros2 param set /scan_box_filter invert true
+```
+
+Параметры: `center_x/y/z`, `size_x/y/z`, `invert` (можно задать и явные границы
+`min_x/min_y/min_z`, `max_x/max_y/max_z`). Куб виден в RViz как полупрозрачный
+куб-маркер (`/scan_box/marker`). Для просмотра: `ros2 run rviz2 rviz2 -d astra_scan/launch/scan_box.rviz`.
+
+### Сохранение обрезанного облака в PLY
+
+```bash
+python3 astra-ros2-launcher/save_cloud.py \
+  --out ~/scans/object.ply --timeout 4 --topic /scan/box_points
 ```
 
 ## Демо синхронизации позиции
@@ -321,6 +387,9 @@ which mirrors the data on a virtual camera model via gz transport.
 │   │   ├── src/gazebo_twin.cpp         # Core node (gz transport)
 │   │   ├── src/test_camera_publisher.cpp # Camera simulation
 │   │   └── launch/                     # launch.py, SDF, RViz, world
+│   ├── astra_scan/                     # Virtual scan-box filter
+│   │   ├── astra_scan/box_filter.py    # scan_box_filter node (Python)
+│   │   └── launch/                     # launch.py + rviz config
 │   └── astra_camera_ros/astra_camera/  # ros2_astra_camera driver
 ├── astra-ros2-launcher/                # PowerShell helpers (start/stop/bag)
 ├── camera_stream/                      # Camera firmware (Arduino)
@@ -361,7 +430,7 @@ sudo udevadm trigger --subsystem-match=usb
 ```bash
 source /opt/ros/jazzy/setup.bash
 cd ~/ros2_learning/ros2_depth_projects/ref
-colcon build --packages-select astra_camera astra_camera_msgs astra_examples \
+colcon build --packages-select astra_camera astra_camera_msgs astra_examples astra_scan \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
@@ -426,6 +495,67 @@ ros2 run image_view image_view image:=/camera/depth/image_raw
 # Depth normalized to grayscale (0–2000 mm):
 python3 normalize_depth.py &    # publishes /camera/depth/view
 ros2 run image_view image_view image:=/camera/depth/view
+```
+
+## Object scanning with a selectable region (virtual box)
+
+Full session: standalone camera (no Gazebo scene) + **RTAB-Map** SLAM + box filter.
+
+```bash
+# 1. Standalone camera (registration + colored cloud)
+ros2 launch astra_examples scan_camera.launch.py
+
+# 2. RTAB-Map RGB-D SLAM
+ros2 launch rtabmap_launch rtabmap.launch.py \
+  rgb_topic:=/camera/color/image_raw \
+  depth_topic:=/camera/depth/image_raw \
+  camera_info_topic:=/camera/depth/camera_info \
+  frame_id:=camera_link approx_sync:=true approx_sync_max_interval:=0.2 \
+  args:="--delete_db_on_start -d" database_path:=~/scans/rtabmap.db \
+  rtabmap_viz:=true rviz:=false
+```
+
+> **Note**: do not keep `gazebo_twin` running while scanning — it publishes its own
+> TF `world → twin_camera` (two unconnected TF trees break RTAB-Map).
+
+### Virtual box filter `scan_box_filter`
+
+The node subscribes to the accumulated map `/rtabmap/cloud_map`, keeps only points
+inside an **adjustable 3D box** and publishes the result to `/scan/box_points`.
+Box position/size change live via parameters (no restart needed).
+
+```bash
+# Launch
+ros2 launch astra_scan scan_box.launch.py
+# or directly:
+scan_box_filter --ros-args \
+  -p input_topic:=/rtabmap/cloud_map -p output_topic:=/scan/box_points \
+  -p center_z:=0.7 -p size_x:=0.8 -p size_y:=0.8 -p size_z:=0.8
+
+# Box center (map frame, meters)
+ros2 param set /scan_box_filter center_x 0.15
+ros2 param set /scan_box_filter center_y -0.05
+ros2 param set /scan_box_filter center_z 0.9
+
+# Box size (meters)
+ros2 param set /scan_box_filter size_x 1.2
+ros2 param set /scan_box_filter size_y 1.2
+ros2 param set /scan_box_filter size_z 1.2
+
+# Invert selection: everything OUTSIDE the box
+ros2 param set /scan_box_filter invert true
+```
+
+Parameters: `center_x/y/z`, `size_x/y/z`, `invert` (explicit bounds
+`min_x/min_y/min_z`, `max_x/max_y/max_z` are supported too). The box is shown in
+RViz as a translucent cube marker (`/scan_box/marker`). View it with:
+`ros2 run rviz2 rviz2 -d astra_scan/launch/scan_box.rviz`.
+
+### Saving the cropped cloud to PLY
+
+```bash
+python3 astra-ros2-launcher/save_cloud.py \
+  --out ~/scans/object.ply --timeout 4 --topic /scan/box_points
 ```
 
 ## Pose-sync demo
